@@ -4,9 +4,10 @@ namespace Flavordex\Endpoint;
 
 use Flavordex\Config;
 use Flavordex\DatabaseHelper;
-use Flavordex\Exception\UnauthorizedException;
-use Flavordex\Model\UpdateRecord;
-use Flavordex\Model\UpdateResponse;
+use Flavordex\Exception\LockedException;
+use Flavordex\Model\CatRecord;
+use Flavordex\Model\EntryRecord;
+use Flavordex\Model\SyncResponse;
 
 /**
  * The sync endpoint for synchronizing journal data between the client and the server.
@@ -16,108 +17,120 @@ use Flavordex\Model\UpdateResponse;
 class SyncEndpoint extends Endpoint {
 
     /**
-     * Get updated journal data from the server.
+     * Start a synchronization session.
      * 
      * @param int $clientId The database ID of the client
-     * @return UpdateRecord
-     * @throws UnauthorizedException
+     * @return SyncResponse
+     * @throws LockedException
      */
-    public function fetchUpdates($clientId) {
+    public function startSync($clientId) {
+        self::requirePost();
         $auth = self::getAuth();
 
         $helper = new DatabaseHelper();
         $helper->setUser($auth);
         $helper->setClientId($clientId);
+        if(!$helper->getLock()) {
+            throw new LockedException('Unable to obtain an exclusive lock');
+        }
 
-        $record = new UpdateRecord();
-        $record->timestamp = floor(microtime(true) * 1000);
-        $record->cats = $helper->getUpdatedCats();
-        $record->entries = $helper->getUpdatedEntries();
-
+        $record = new SyncResponse();
+        $record->deletedCats = $helper->getDeletedCats();
+        $record->updatedCats = $helper->getUpdatedCats();
+        $record->deletedEntries = $helper->getDeletedEntries();
+        $record->updatedEntries = $helper->getUpdatedEntries();
         return $record;
     }
 
     /**
-     * Send updated journal data to the server.
+     * End the synchronization session.
      * 
      * @param int $clientId The database ID of the client
-     * @return UpdateResponse
-     * @throws MethodNotAllowedException
-     * @throws UnauthorizedException
      */
-    public function pushUpdates($clientId) {
-        self::requirePost();
-        $auth = self::getAuth();
-
-        $record = new UpdateRecord(self::getPost());
-
-        $helper = new DatabaseHelper();
-        $helper->setUser($auth);
-        $helper->setClientId($clientId);
-
-        $response = new UpdateResponse();
-        $dataChanged = false;
-
-        if($record->cats) {
-            $response->catStatuses = array();
-            foreach($record->cats as $cat) {
-                $status = $helper->pushCat($cat);
-                if($status) {
-                    $dataChanged = true;
-                }
-                $response->catStatuses[$cat->uuid] = $status;
-            }
-        }
-
-        if($record->entries) {
-            $response->entryStatuses = array();
-            $response->entryIds = array();
-            foreach($record->entries as $entry) {
-                $status = $helper->pushEntry($entry);
-                if($status) {
-                    $dataChanged = true;
-                }
-                $response->entryStatuses[$entry->uuid] = $status;
-                $response->entryIds[$entry->uuid] = $entry->id;
-            }
-        }
-
-        if($dataChanged) {
-            $this->notifyClients($helper);
-        }
-
-        return $response;
-    }
-
-    /**
-     * Confirm that the sync was processed by the client.
-     * 
-     * @param int $clientId The database ID of the client
-     * @throws MethodNotAllowedException
-     * @throws UnauthorizedException
-     */
-    public function confirmSync($clientId) {
+    public function endSync($clientId) {
         self::requirePost();
         $auth = self::getAuth();
 
         $helper = new DatabaseHelper();
         $helper->setUser($auth);
         $helper->setClientId($clientId);
-        $helper->setSyncTime(self::getPost());
+
+        $notify = $helper->changesPending();
+
+        $helper->releaseLock();
+
+        if($notify) {
+            self::notifyClients($helper);
+        }
     }
 
     /**
-     * Get the list of remote entry IDs for the user.
-     *
-     * @return RemoteIdsRecord
-     * @throws UnauthorizedException
+     * Get a single category.
+     * 
+     * @param int $clientId The database ID of the client
+     * @param string $catUuid The UUID of the category
+     * @return CatRecord
      */
-    public function getRemoteIds() {
-        $auth = self::getAuth();
+    public function getCat($clientId, $catUuid) {
+        $helper = self::getLockedHelper($clientId);
+        return $helper->getCat($catUuid);
+    }
 
+    /**
+     * Send a single category.
+     * 
+     * @param int $clientId The database ID of the client
+     * @return int 1 on success, 0 on failure
+     */
+    public function putCat($clientId) {
+        self::requirePost();
+        $helper = self::getLockedHelper($clientId);
+        $cat = new CatRecord(self::getPost());
+        return $helper->pushCat($cat) ? 1 : 0;
+    }
+
+    /**
+     * Get a single entry.
+     * 
+     * @param int $clientId The database ID of the client
+     * @param string $entryUuid The UUID of the entry
+     * @return EntryRecord
+     */
+    public function getEntry($clientId, $entryUuid) {
+        $helper = self::getLockedHelper($clientId);
+        return $helper->getEntry($entryUuid);
+    }
+
+    /**
+     * Send a single entry.
+     * 
+     * @param int $clientId The database ID of the client
+     * @return int 1 on success, 0 on failure
+     */
+    public function putEntry($clientId) {
+        self::requirePost();
+        $helper = self::getLockedHelper($clientId);
+        $entry = new EntryRecord(self::getPost());
+        return $helper->pushEntry($entry) ? 1 : 0;
+    }
+
+    /**
+     * Get an authenticated database helper and refresh the exclusive lock.
+     * 
+     * @param int $clientId The database ID of the client
+     * @return DatabaseHelper
+     * @throws LockedException
+     */
+    private static function getLockedHelper($clientId) {
+        $auth = self::getAuth();
         $helper = new DatabaseHelper();
         $helper->setUser($auth);
-        return $helper->getEntryIds();
+        $helper->setClientId($clientId);
+        if(!$helper->touchLock()) {
+            throw new LockedException('Client does not have an exclusive lock');
+        }
+
+        return $helper;
     }
 
     /**
@@ -125,7 +138,7 @@ class SyncEndpoint extends Endpoint {
      * 
      * @param DatabaseHelper $helper
      */
-    private function notifyClients(DatabaseHelper $helper) {
+    private static function notifyClients(DatabaseHelper $helper) {
         $opts = array('https' => array(
                 'method' => 'POST',
                 'header' => array(

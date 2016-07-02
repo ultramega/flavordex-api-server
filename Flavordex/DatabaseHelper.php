@@ -9,7 +9,6 @@ use Flavordex\Model\ExtraRecord;
 use Flavordex\Model\FlavorRecord;
 use Flavordex\Model\PhotoRecord;
 use Flavordex\Model\RegistrationRecord;
-use Flavordex\Model\RemoteIdsRecord;
 
 /**
  * Database access helper.
@@ -73,6 +72,101 @@ class DatabaseHelper {
      */
     public function setClientId($clientId) {
         $this->clientId = (int)$clientId;
+    }
+
+    /**
+     * Obtain an exclusive lock for the client of the user.
+     * 
+     * @return boolean Whether the lock was successfully obtained
+     */
+    public function getLock() {
+        $stmt = $this->db->prepare('UPDATE clients SET lock_expire = TIMESTAMPADD(SECOND, ?, CURRENT_TIMESTAMP()) WHERE id = ? AND user = ? AND NOT (SELECT 1 FROM clients WHERE user = ? AND lock_expire > CURRENT_TIMESTAMP() LIMIT 1);');
+        if($stmt) {
+            try {
+                $stmt->bind_param('iiii', Config::LOCK_TIMEOUT, $this->clientId, $this->userId, $this->userId);
+                if($stmt->execute()) {
+                    return $stmt->affected_rows > 0;
+                }
+            } finally {
+                $stmt->close();
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Release the exclusive lock held by the client of the user.
+     */
+    public function releaseLock() {
+        $stmt = $this->db->prepare('UPDATE clients SET last_sync = ?, lock_expire = NULL, changes_pending = 0 WHERE id = ? AND user = ?');
+        if($stmt) {
+            try {
+                $now = self::getTimestamp();
+                $stmt->bind_param('sii', $now, $this->clientId, $this->userId);
+                $stmt->execute();
+            } finally {
+                $stmt->close();
+            }
+        }
+    }
+
+    /**
+     * Update the exclusive lock expiration time for the client.
+     * 
+     * @return boolean Whether the client still has a lock
+     */
+    public function touchLock() {
+        $stmt = $this->db->prepare('UPDATE clients SET lock_expire = TIMESTAMPADD(SECOND, ?, CURRENT_TIMESTAMP()) WHERE id = ? AND user = ? AND lock_expire > CURRENT_TIMESTAMP();');
+        if($stmt) {
+            try {
+                $stmt->bind_param('iii', Config::LOCK_TIMEOUT, $this->clientId, $this->userId);
+                if($stmt->execute()) {
+                    return $stmt->affected_rows > 0;
+                }
+            } finally {
+                $stmt->close();
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check whether there are pending changes from the client.
+     * 
+     * @return boolean
+     */
+    public function changesPending() {
+        $stmt = $this->db->prepare('SELECT changes_pending FROM clients WHERE id = ? AND user = ?;');
+        if($stmt) {
+            try {
+                $stmt->bind_param('ii', $this->clientId, $this->userId);
+                if($stmt->execute()) {
+                    $stmt->bind_result($changed);
+                    return $stmt->fetch() && $changed;
+                }
+            } finally {
+                $stmt->close();
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Flag the client as having pending changes.
+     */
+    private function changed() {
+        $stmt = $this->db->prepare('UPDATE clients SET changes_pending = 1 WHERE id = ? AND user = ?');
+        if($stmt) {
+            try {
+                $stmt->bind_param('ii', $this->clientId, $this->userId);
+                $stmt->execute();
+            } finally {
+                $stmt->close();
+            }
+        }
     }
 
     /**
@@ -141,27 +235,6 @@ class DatabaseHelper {
     }
 
     /**
-     * Update the last sync time for the client.
-     *
-     * @param int $time The Unix timestamp
-     * @return boolean Whether the sync time was successfully updated
-     */
-    public function setSyncTime($time) {
-        $stmt = $this->db->prepare('UPDATE clients SET last_sync = ? WHERE user = ? AND id = ?;');
-        if($stmt) {
-            try {
-                $stmt->bind_param('sii', $time, $this->userId, $this->clientId);
-                $stmt->execute();
-                return $stmt->affected_rows;
-            } finally {
-                $stmt->close();
-            }
-        }
-
-        return false;
-    }
-
-    /**
      * Set the Firebase Cloud Messaging ID for the specified client.
      *
      * @param int $clientId The database ID of the client
@@ -215,45 +288,12 @@ class DatabaseHelper {
     }
 
     /**
-     * Get the list of entry IDs for the user.
+     * Get all entries deleted by other clients since the client's last sync.
      *
-     * @return RemoteIdsRecord
+     * @return string[] The UUIDs of entries deleted since the last sync
      * @throws UnauthorizedException
      */
-    public function getEntryIds() {
-        if(!$this->userId) {
-            throw new UnauthorizedException();
-        }
-
-        $stmt = $this->db->prepare('SELECT id, uuid FROM entries WHERE user = ?;');
-        if($stmt) {
-            try {
-                $stmt->bind_param('i', $this->userId);
-                if($stmt->execute()) {
-                    $list = array();
-
-                    $stmt->bind_result($id, $uuid);
-                    while($stmt->fetch()) {
-                        $list[$uuid] = $id;
-                    }
-
-                    $record = new RemoteIdsRecord();
-                    $record->entryIds = $list;
-                    return $record;
-                }
-            } finally {
-                $stmt->close();
-            }
-        }
-    }
-
-    /**
-     * Get all entries updated by other clients since the client's last sync.
-     *
-     * @return EntryRecord[] The list of entries updated since the last sync
-     * @throws UnauthorizedException
-     */
-    public function getUpdatedEntries() {
+    public function getDeletedEntries() {
         if(!$this->userId) {
             throw new UnauthorizedException();
         }
@@ -267,11 +307,7 @@ class DatabaseHelper {
                 if($stmt->execute()) {
                     $stmt->bind_result($uuid);
                     while($stmt->fetch()) {
-                        $record = new EntryRecord();
-                        $record->uuid = $uuid;
-                        $record->deleted = true;
-
-                        $records[] = $record;
+                        $records[] = $uuid;
                     }
                 }
             } finally {
@@ -279,13 +315,59 @@ class DatabaseHelper {
             }
         }
 
-        $stmt = $this->db->prepare('SELECT a.id, a.uuid, a.cat, b.uuid AS cat_uuid, a.title, a.maker, a.origin, a.price, a.location, a.date, a.rating, a.notes, a.updated, a.shared FROM entries a LEFT JOIN categories b ON a.cat = b.id WHERE a.user = ? AND a.client != ? AND a.sync_time > (SELECT last_sync FROM clients WHERE id = ?);');
+        return $records;
+    }
+
+    /**
+     * Get all entries updated by other clients since the client's last sync.
+     *
+     * @return array[string]int Map of UUIDs to update timestamps of entries updated since the last sync
+     * @throws UnauthorizedException
+     */
+    public function getUpdatedEntries() {
+        if(!$this->userId) {
+            throw new UnauthorizedException();
+        }
+
+        $records = array();
+
+        $stmt = $this->db->prepare('SELECT uuid, updated FROM entries WHERE user = ? AND client != ? AND sync_time > (SELECT last_sync FROM clients WHERE id = ?);');
         if($stmt) {
             try {
                 $stmt->bind_param('iii', $this->userId, $this->clientId, $this->clientId);
                 if($stmt->execute()) {
-                    $stmt->bind_result($id, $uuid, $cat, $catUuid, $title, $maker, $origin, $price, $location, $date, $rating, $notes, $updated, $shared);
+                    $stmt->bind_result($uuid, $updated);
                     while($stmt->fetch()) {
+                        $records[$uuid] = $updated;
+                    }
+                }
+            } finally {
+                $stmt->close();
+            }
+        }
+
+        return $records;
+    }
+
+    /**
+     * Get a single entry.
+     * 
+     * @param type $entryUuid The UUID of the entry
+     * @return EntryRecord
+     * @throws UnauthorizedException
+     */
+    public function getEntry($entryUuid) {
+        if(!$this->userId) {
+            throw new UnauthorizedException();
+        }
+
+        $stmt = $this->db->prepare('SELECT a.id, a.uuid, a.cat, b.uuid AS cat_uuid, a.title, a.maker, a.origin, a.price, a.location, a.date, a.rating, a.notes, a.updated, a.shared FROM entries a LEFT JOIN categories b ON a.cat = b.id WHERE a.uuid = ? AND a.user = ? LIMIT 1;');
+        if($stmt) {
+            try {
+                $stmt->bind_param('si', $entryUuid, $this->userId);
+                if($stmt->execute()) {
+                    $stmt->bind_result($id, $uuid, $cat, $catUuid, $title, $maker, $origin, $price, $location, $date, $rating, $notes, $updated, $shared);
+                    if($stmt->fetch()) {
                         $record = new EntryRecord();
                         $record->id = $id;
                         $record->uuid = $uuid;
@@ -306,7 +388,7 @@ class DatabaseHelper {
                         $record->flavors = $this->getEntryFlavors($id);
                         $record->photos = $this->getEntryPhotos($id);
 
-                        $records[] = $record;
+                        return $record;
                     }
                 }
             } finally {
@@ -314,7 +396,7 @@ class DatabaseHelper {
             }
         }
 
-        return $records;
+        return null;
     }
 
     /**
@@ -468,6 +550,9 @@ class DatabaseHelper {
 
         $this->db->autocommit(true);
 
+        if($success) {
+            $this->changed();
+        }
         return $success;
     }
 
@@ -712,12 +797,12 @@ class DatabaseHelper {
     }
 
     /**
-     * Get all categories updated by other clients since the client's last sync.
+     * Get all categories deleted by other clients since the client's last sync.
      *
-     * @return CatRecord[] The list of categories updated since the last sync
+     * @return string[] The UUIDs of categories deleted since the last sync
      * @throws UnauthorizedException
      */
-    public function getUpdatedCats() {
+    public function getDeletedCats() {
         if(!$this->userId) {
             throw new UnauthorizedException();
         }
@@ -731,11 +816,7 @@ class DatabaseHelper {
                 if($stmt->execute()) {
                     $stmt->bind_result($uuid);
                     while($stmt->fetch()) {
-                        $record = new CatRecord();
-                        $record->uuid = $uuid;
-                        $record->deleted = true;
-
-                        $records[] = $record;
+                        $records[] = $uuid;
                     }
                 }
             } finally {
@@ -743,10 +824,56 @@ class DatabaseHelper {
             }
         }
 
-        $stmt = $this->db->prepare('SELECT id, uuid, name, updated FROM categories WHERE user = ? AND client != ? AND sync_time > (SELECT last_sync FROM clients WHERE id = ?);');
+        return $records;
+    }
+
+    /**
+     * Get all categories updated by other clients since the client's last sync.
+     *
+     * @return array[string]int Map of UUIDs to update timestamps of categories updated since the last sync
+     * @throws UnauthorizedException
+     */
+    public function getUpdatedCats() {
+        if(!$this->userId) {
+            throw new UnauthorizedException();
+        }
+
+        $records = array();
+
+        $stmt = $this->db->prepare('SELECT uuid, updated FROM categories WHERE user = ? AND client != ? AND sync_time > (SELECT last_sync FROM clients WHERE id = ?);');
         if($stmt) {
             try {
                 $stmt->bind_param('iii', $this->userId, $this->clientId, $this->clientId);
+                if($stmt->execute()) {
+                    $stmt->bind_result($uuid, $updated);
+                    while($stmt->fetch()) {
+                        $records[$uuid] = $updated;
+                    }
+                }
+            } finally {
+                $stmt->close();
+            }
+        }
+
+        return $records;
+    }
+
+    /**
+     * Get a single category.
+     * 
+     * @param type $catUuid The UUID of the category
+     * @return CatRecord
+     * @throws UnauthorizedException
+     */
+    public function getCat($catUuid) {
+        if(!$this->userId) {
+            throw new UnauthorizedException();
+        }
+
+        $stmt = $this->db->prepare('SELECT id, uuid, name, updated FROM categories WHERE uuid = ? AND user = ?;');
+        if($stmt) {
+            try {
+                $stmt->bind_param('si', $catUuid, $this->userId);
                 if($stmt->execute()) {
                     $stmt->bind_result($id, $uuid, $name, $updated);
                     while($stmt->fetch()) {
@@ -759,7 +886,7 @@ class DatabaseHelper {
                         $record->extras = $this->getCatExtras($id);
                         $record->flavors = $this->getCatFlavors($id);
 
-                        $records[] = $record;
+                        return $record;
                     }
                 }
             } finally {
@@ -767,7 +894,7 @@ class DatabaseHelper {
             }
         }
 
-        return $records;
+        return null;
     }
 
     /**
@@ -874,6 +1001,9 @@ class DatabaseHelper {
 
         $this->db->autocommit(true);
 
+        if($success) {
+            $this->changed();
+        }
         return $success;
     }
 
