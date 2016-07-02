@@ -7,7 +7,7 @@ use Flavordex\DatabaseHelper;
 use Flavordex\Exception\LockedException;
 use Flavordex\Model\CatRecord;
 use Flavordex\Model\EntryRecord;
-use Flavordex\Model\SyncResponse;
+use Flavordex\Model\SyncRecord;
 use Flavordex\Model\UpdateResponse;
 
 /**
@@ -21,7 +21,6 @@ class SyncEndpoint extends Endpoint {
      * Start a synchronization session.
      * 
      * @param int $clientId The database ID of the client
-     * @return SyncResponse
      * @throws LockedException
      */
     public function startSync($clientId) {
@@ -34,13 +33,6 @@ class SyncEndpoint extends Endpoint {
         if(!$helper->getLock()) {
             throw new LockedException('Unable to obtain an exclusive lock');
         }
-
-        $record = new SyncResponse();
-        $record->deletedCats = $helper->getDeletedCats();
-        $record->updatedCats = $helper->getUpdatedCats();
-        $record->deletedEntries = $helper->getDeletedEntries();
-        $record->updatedEntries = $helper->getUpdatedEntries();
-        return $record;
     }
 
     /**
@@ -63,6 +55,24 @@ class SyncEndpoint extends Endpoint {
         if($notify) {
             self::notifyClients($helper);
         }
+    }
+
+    /**
+     * Get a list of deleted and updated categories and entries.
+     * 
+     * @param int $clientId The database ID of the client
+     * @return SyncRecord
+     */
+    public function getUpdates($clientId) {
+        $helper = self::getLockedHelper($clientId);
+
+        $record = new SyncRecord();
+        $record->deletedCats = $helper->getDeletedCats();
+        $record->updatedCats = $helper->getUpdatedCats();
+        $record->deletedEntries = $helper->getDeletedEntries();
+        $record->updatedEntries = $helper->getUpdatedEntries();
+
+        return $record;
     }
 
     /**

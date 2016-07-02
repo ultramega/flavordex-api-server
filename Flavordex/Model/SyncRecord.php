@@ -7,7 +7,7 @@ namespace Flavordex\Model;
  *
  * @author Steve Guidetti
  */
-class SyncResponse extends Model {
+class SyncRecord extends Model {
 
     /**
      * @var string[] UUIDs of deleted categories
