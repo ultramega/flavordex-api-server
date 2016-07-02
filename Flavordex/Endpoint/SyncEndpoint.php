@@ -8,6 +8,7 @@ use Flavordex\Exception\LockedException;
 use Flavordex\Model\CatRecord;
 use Flavordex\Model\EntryRecord;
 use Flavordex\Model\SyncResponse;
+use Flavordex\Model\UpdateResponse;
 
 /**
  * The sync endpoint for synchronizing journal data between the client and the server.
@@ -80,13 +81,18 @@ class SyncEndpoint extends Endpoint {
      * Send a single category.
      * 
      * @param int $clientId The database ID of the client
-     * @return int 1 on success, 0 on failure
+     * @return UpdateResponse
      */
     public function putCat($clientId) {
         self::requirePost();
         $helper = self::getLockedHelper($clientId);
         $cat = new CatRecord(self::getPost());
-        return $helper->pushCat($cat) ? 1 : 0;
+
+        $response = new UpdateResponse();
+        $response->success = $helper->pushCat($cat);
+        $response->remoteId = $cat->id;
+
+        return $response;
     }
 
     /**
@@ -105,13 +111,18 @@ class SyncEndpoint extends Endpoint {
      * Send a single entry.
      * 
      * @param int $clientId The database ID of the client
-     * @return int 1 on success, 0 on failure
+     * @return UpdateResponse
      */
     public function putEntry($clientId) {
         self::requirePost();
         $helper = self::getLockedHelper($clientId);
         $entry = new EntryRecord(self::getPost());
-        return $helper->pushEntry($entry) ? 1 : 0;
+
+        $response = new UpdateResponse();
+        $response->success = $helper->pushEntry($entry);
+        $response->remoteId = $entry->id;
+
+        return $response;
     }
 
     /**
