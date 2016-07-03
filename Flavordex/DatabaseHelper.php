@@ -813,7 +813,7 @@ class DatabaseHelper {
             try {
                 $stmt->bind_param('iii', $this->userId, $this->clientId, $this->clientId);
                 if($stmt->execute()) {
-                    $stmt->bind_result($uuid);
+                    $stmt->bind_result($uuid, $age);
                     while($stmt->fetch()) {
                         $records[$uuid] = (int)($age / 1000);
                     }
