@@ -228,8 +228,7 @@ class DatabaseHelper {
         if($stmt) {
             try {
                 $stmt->bind_param('ii', $clientId, $this->userId);
-                $stmt->execute();
-                return $stmt->affected_rows > 0;
+                return $stmt->execute() && $stmt->affected_rows > 0;
             } finally {
                 $stmt->close();
             }
@@ -250,8 +249,7 @@ class DatabaseHelper {
         if($stmt) {
             try {
                 $stmt->bind_param('si', $fcmId, $clientId);
-                $stmt->execute();
-                $stmt->affected_rows;
+                return $stmt->execute() && $stmt->affected_rows > 0;
             } finally {
                 $stmt->close();
             }
