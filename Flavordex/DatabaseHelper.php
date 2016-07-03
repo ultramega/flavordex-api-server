@@ -229,7 +229,7 @@ class DatabaseHelper {
             try {
                 $stmt->bind_param('ii', $clientId, $this->userId);
                 $stmt->execute();
-                return $stmt->affected_rows;
+                return $stmt->affected_rows > 0;
             } finally {
                 $stmt->close();
             }
@@ -876,7 +876,7 @@ class DatabaseHelper {
                 $stmt->bind_param('si', $catUuid, $this->userId);
                 if($stmt->execute()) {
                     $stmt->bind_result($id, $uuid, $name, $age);
-                    while($stmt->fetch()) {
+                    if($stmt->fetch()) {
                         $record = new CatRecord();
                         $record->id = $id;
                         $record->uuid = $uuid;
