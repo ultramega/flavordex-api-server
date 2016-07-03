@@ -35,7 +35,7 @@ $method = filter_input(INPUT_GET, 'method', FILTER_VALIDATE_REGEXP, $filterOptio
 if(!$method) {
     throw new BadRequestException('Invalid method name');
 }
-$filterOptions['options']['regexp'] = '/^[\w\/]*$/';
+$filterOptions['options']['regexp'] = '/^[\w\/-]*$/';
 $param = filter_input(INPUT_GET, 'params', FILTER_VALIDATE_REGEXP, $filterOptions);
 if($param === false) {
     throw new BadRequestException('Invalid parameter string');
