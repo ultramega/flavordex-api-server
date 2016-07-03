@@ -80,7 +80,7 @@ class DatabaseHelper {
      * @return boolean Whether the lock was successfully obtained
      */
     public function getLock() {
-        $stmt = $this->db->prepare('UPDATE clients SET lock_expire = TIMESTAMPADD(SECOND, ?, CURRENT_TIMESTAMP()) WHERE id = ? AND user = ? AND NOT (SELECT 1 FROM clients WHERE user = ? AND lock_expire > CURRENT_TIMESTAMP() LIMIT 1);');
+        $stmt = $this->db->prepare('UPDATE clients SET lock_expire = TIMESTAMPADD(SECOND, ?, NOW(3)) WHERE id = ? AND user = ? AND NOT (SELECT 1 FROM clients WHERE user = ? AND lock_expire > NOW(3) LIMIT 1);');
         if($stmt) {
             try {
                 $stmt->bind_param('iiii', Config::LOCK_TIMEOUT, $this->clientId, $this->userId, $this->userId);
@@ -99,11 +99,10 @@ class DatabaseHelper {
      * Release the exclusive lock held by the client of the user.
      */
     public function releaseLock() {
-        $stmt = $this->db->prepare('UPDATE clients SET last_sync = ?, lock_expire = NULL, changes_pending = 0 WHERE id = ? AND user = ?');
+        $stmt = $this->db->prepare('UPDATE clients SET last_sync = NOW(3), lock_expire = NULL, changes_pending = 0 WHERE id = ? AND user = ?');
         if($stmt) {
             try {
-                $now = self::getTimestamp();
-                $stmt->bind_param('sii', $now, $this->clientId, $this->userId);
+                $stmt->bind_param('ii', $this->clientId, $this->userId);
                 $stmt->execute();
             } finally {
                 $stmt->close();
@@ -117,7 +116,7 @@ class DatabaseHelper {
      * @return boolean Whether the client still has a lock
      */
     public function touchLock() {
-        $stmt = $this->db->prepare('UPDATE clients SET lock_expire = TIMESTAMPADD(SECOND, ?, CURRENT_TIMESTAMP()) WHERE id = ? AND user = ? AND lock_expire > CURRENT_TIMESTAMP();');
+        $stmt = $this->db->prepare('UPDATE clients SET lock_expire = TIMESTAMPADD(SECOND, ?, NOW(3)) WHERE id = ? AND user = ? AND lock_expire > NOW(3);');
         if($stmt) {
             try {
                 $stmt->bind_param('iii', Config::LOCK_TIMEOUT, $this->clientId, $this->userId);
@@ -300,14 +299,14 @@ class DatabaseHelper {
 
         $records = array();
 
-        $stmt = $this->db->prepare('SELECT uuid FROM deleted WHERE user = ? AND client != ? AND sync_time > (SELECT last_sync FROM clients WHERE id = ?);');
+        $stmt = $this->db->prepare('SELECT uuid, TIMESTAMPDIFF(MICROSECOND, sync_time, NOW(3)) FROM deleted WHERE user = ? AND client != ? AND sync_time > (SELECT last_sync FROM clients WHERE id = ?);');
         if($stmt) {
             try {
                 $stmt->bind_param('iii', $this->userId, $this->clientId, $this->clientId);
                 if($stmt->execute()) {
-                    $stmt->bind_result($uuid);
+                    $stmt->bind_result($uuid, $age);
                     while($stmt->fetch()) {
-                        $records[] = $uuid;
+                        $records[$uuid] = (int)($age / 1000);
                     }
                 }
             } finally {
@@ -331,14 +330,14 @@ class DatabaseHelper {
 
         $records = array();
 
-        $stmt = $this->db->prepare('SELECT uuid, updated FROM entries WHERE user = ? AND client != ? AND sync_time > (SELECT last_sync FROM clients WHERE id = ?);');
+        $stmt = $this->db->prepare('SELECT uuid, TIMESTAMPDIFF(MICROSECOND, sync_time, NOW(3)) FROM entries WHERE user = ? AND client != ? AND sync_time > (SELECT last_sync FROM clients WHERE id = ?);');
         if($stmt) {
             try {
                 $stmt->bind_param('iii', $this->userId, $this->clientId, $this->clientId);
                 if($stmt->execute()) {
-                    $stmt->bind_result($uuid, $updated);
+                    $stmt->bind_result($uuid, $age);
                     while($stmt->fetch()) {
-                        $records[$uuid] = $updated;
+                        $records[$uuid] = (int)($age / 1000);
                     }
                 }
             } finally {
@@ -361,12 +360,12 @@ class DatabaseHelper {
             throw new UnauthorizedException();
         }
 
-        $stmt = $this->db->prepare('SELECT a.id, a.uuid, a.cat, b.uuid AS cat_uuid, a.title, a.maker, a.origin, a.price, a.location, a.date, a.rating, a.notes, a.updated, a.shared FROM entries a LEFT JOIN categories b ON a.cat = b.id WHERE a.uuid = ? AND a.user = ? LIMIT 1;');
+        $stmt = $this->db->prepare('SELECT a.id, a.uuid, a.cat, b.uuid, a.title, a.maker, a.origin, a.price, a.location, a.date, a.rating, a.notes, TIMESTAMPDIFF(MICROSECOND, a.sync_time, NOW(3)), a.shared FROM entries a LEFT JOIN categories b ON a.cat = b.id WHERE a.uuid = ? AND a.user = ? LIMIT 1;');
         if($stmt) {
             try {
                 $stmt->bind_param('si', $entryUuid, $this->userId);
                 if($stmt->execute()) {
-                    $stmt->bind_result($id, $uuid, $cat, $catUuid, $title, $maker, $origin, $price, $location, $date, $rating, $notes, $updated, $shared);
+                    $stmt->bind_result($id, $uuid, $cat, $catUuid, $title, $maker, $origin, $price, $location, $date, $rating, $notes, $age, $shared);
                     if($stmt->fetch()) {
                         $record = new EntryRecord();
                         $record->id = $id;
@@ -381,7 +380,7 @@ class DatabaseHelper {
                         $record->date = $date;
                         $record->rating = $rating;
                         $record->notes = $notes;
-                        $record->updated = $updated;
+                        $record->age = (int)($age / 1000);
                         $record->shared = (boolean)$shared;
 
                         $record->extras = $this->getEntryExtras($id);
@@ -563,11 +562,10 @@ class DatabaseHelper {
      * @return boolean Whether the operation was successful
      */
     private function insertEntry(EntryRecord $entry) {
-        $stmt = $this->db->prepare('INSERT INTO entries (uuid, user, cat, title, maker, origin, price, location, date, rating, notes, updated, sync_time, client, shared) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);');
+        $stmt = $this->db->prepare('INSERT INTO entries (uuid, user, cat, title, maker, origin, price, location, date, rating, notes, client, shared) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);');
         if($stmt) {
             try {
-                $now = self::getTimestamp();
-                $stmt->bind_param('siissssssdsssii', $entry->uuid, $this->userId, $entry->cat, $entry->title, $entry->maker, $entry->origin, $entry->price, $entry->location, $entry->date, $entry->rating, $entry->notes, $entry->updated, $now, $this->clientId, $entry->shared);
+                $stmt->bind_param('siissssssdsii', $entry->uuid, $this->userId, $entry->cat, $entry->title, $entry->maker, $entry->origin, $entry->price, $entry->location, $entry->date, $entry->rating, $entry->notes, $this->clientId, $entry->shared);
                 if($stmt->execute()) {
                     $entry->id = $stmt->insert_id;
                     if($entry->id) {
@@ -601,11 +599,10 @@ class DatabaseHelper {
      * @return boolean Whether the operation was successful
      */
     private function updateEntry(EntryRecord $entry) {
-        $stmt = $this->db->prepare('UPDATE entries SET title = ?, maker = ?, origin = ?, price = ?, location = ?, date = ?, rating = ?, notes = ?, updated = ?, sync_time = ?, client = ?, shared = ? WHERE user = ? AND id = ? AND updated < ?;');
+        $stmt = $this->db->prepare('UPDATE entries SET title = ?, maker = ?, origin = ?, price = ?, location = ?, date = ?, rating = ?, notes = ?, sync_time = NOW(3), client = ?, shared = ? WHERE user = ? AND id = ? AND sync_time < SUBTIME(NOW(3), ? / 1000);');
         if($stmt) {
             try {
-                $now = self::getTimestamp();
-                $stmt->bind_param('ssssssdsssiiiis', $entry->title, $entry->maker, $entry->origin, $entry->price, $entry->location, $entry->date, $entry->rating, $entry->notes, $entry->updated, $now, $this->clientId, $entry->shared, $this->userId, $entry->id, $entry->updated);
+                $stmt->bind_param('ssssssdsiiiii', $entry->title, $entry->maker, $entry->origin, $entry->price, $entry->location, $entry->date, $entry->rating, $entry->notes, $this->clientId, $entry->shared, $this->userId, $entry->id, $entry->age);
                 if($stmt->execute() && $stmt->affected_rows) {
                     $this->updateEntryExtras($entry);
                     $this->updateEntryFlavors($entry);
@@ -767,10 +764,10 @@ class DatabaseHelper {
      */
     private function deleteEntry(EntryRecord $entry) {
         $changed = 0;
-        $stmt = $this->db->prepare('DELETE FROM entries WHERE user = ? AND id = ? AND updated < ?;');
+        $stmt = $this->db->prepare('DELETE FROM entries WHERE user = ? AND id = ? AND sync_time < SUBTIME(NOW(3), ? / 1000);');
         if($stmt) {
             try {
-                $stmt->bind_param('iis', $this->userId, $entry->id, $entry->updated);
+                $stmt->bind_param('iii', $this->userId, $entry->id, $entry->age);
                 $stmt->execute();
                 $changed = $stmt->affected_rows;
             } finally {
@@ -779,14 +776,11 @@ class DatabaseHelper {
         }
 
         if($changed) {
-            $stmt = $this->db->prepare('INSERT INTO deleted (user, type, cat, uuid, sync_time, client) VALUES (?, \'entry\', ?, ?, ?, ?);');
+            $stmt = $this->db->prepare('INSERT INTO deleted (user, type, cat, uuid, client) VALUES (?, \'entry\', ?, ?, ?);');
             if($stmt) {
                 try {
-                    $now = self::getTimestamp();
-                    $stmt->bind_param('iissi', $this->userId, $entry->cat, $entry->uuid, $now, $this->clientId);
-                    $stmt->execute();
-
-                    return true;
+                    $stmt->bind_param('iisi', $this->userId, $entry->cat, $entry->uuid, $this->clientId);
+                    return $stmt->execute();
                 } finally {
                     $stmt->close();
                 }
@@ -809,14 +803,14 @@ class DatabaseHelper {
 
         $records = array();
 
-        $stmt = $this->db->prepare('SELECT uuid FROM deleted WHERE user = ? AND client != ? AND sync_time > (SELECT last_sync FROM clients WHERE id = ?);');
+        $stmt = $this->db->prepare('SELECT uuid, TIMESTAMPDIFF(MICROSECOND, sync_time, NOW(3)) FROM deleted WHERE user = ? AND client != ? AND sync_time > (SELECT last_sync FROM clients WHERE id = ?);');
         if($stmt) {
             try {
                 $stmt->bind_param('iii', $this->userId, $this->clientId, $this->clientId);
                 if($stmt->execute()) {
                     $stmt->bind_result($uuid);
                     while($stmt->fetch()) {
-                        $records[] = $uuid;
+                        $records[$uuid] = (int)($age / 1000);
                     }
                 }
             } finally {
@@ -840,14 +834,14 @@ class DatabaseHelper {
 
         $records = array();
 
-        $stmt = $this->db->prepare('SELECT uuid, updated FROM categories WHERE user = ? AND client != ? AND sync_time > (SELECT last_sync FROM clients WHERE id = ?);');
+        $stmt = $this->db->prepare('SELECT uuid, TIMESTAMPDIFF(MICROSECOND, sync_time, NOW(3)) FROM categories WHERE user = ? AND client != ? AND sync_time > (SELECT last_sync FROM clients WHERE id = ?);');
         if($stmt) {
             try {
                 $stmt->bind_param('iii', $this->userId, $this->clientId, $this->clientId);
                 if($stmt->execute()) {
-                    $stmt->bind_result($uuid, $updated);
+                    $stmt->bind_result($uuid, $age);
                     while($stmt->fetch()) {
-                        $records[$uuid] = $updated;
+                        $records[$uuid] = (int)($age / 1000);
                     }
                 }
             } finally {
@@ -870,18 +864,18 @@ class DatabaseHelper {
             throw new UnauthorizedException();
         }
 
-        $stmt = $this->db->prepare('SELECT id, uuid, name, updated FROM categories WHERE uuid = ? AND user = ?;');
+        $stmt = $this->db->prepare('SELECT id, uuid, name, TIMESTAMPDIFF(MICROSECOND, sync_time, NOW(3)) FROM categories WHERE uuid = ? AND user = ?;');
         if($stmt) {
             try {
                 $stmt->bind_param('si', $catUuid, $this->userId);
                 if($stmt->execute()) {
-                    $stmt->bind_result($id, $uuid, $name, $updated);
+                    $stmt->bind_result($id, $uuid, $name, $age);
                     while($stmt->fetch()) {
                         $record = new CatRecord();
                         $record->id = $id;
                         $record->uuid = $uuid;
                         $record->name = $name;
-                        $record->updated = $updated;
+                        $record->age = (int)($age / 1000);
 
                         $record->extras = $this->getCatExtras($id);
                         $record->flavors = $this->getCatFlavors($id);
@@ -1014,11 +1008,10 @@ class DatabaseHelper {
      * @return boolean Whether the operation was successful
      */
     private function insertCat(CatRecord $cat) {
-        $stmt = $this->db->prepare('INSERT INTO categories (uuid, user, name, updated, sync_time, client) VALUES (?, ?, ?, ?, ?, ?);');
+        $stmt = $this->db->prepare('INSERT INTO categories (uuid, user, name, client) VALUES (?, ?, ?, ?);');
         if($stmt) {
             try {
-                $now = self::getTimestamp();
-                $stmt->bind_param('sisssi', $cat->uuid, $this->userId, $cat->name, $cat->updated, $now, $this->clientId);
+                $stmt->bind_param('sisi', $cat->uuid, $this->userId, $cat->name, $this->clientId);
                 if($stmt->execute()) {
                     $cat->id = $stmt->insert_id;
                     if($cat->id) {
@@ -1051,11 +1044,10 @@ class DatabaseHelper {
      * @return boolean Whether the operation was successful
      */
     private function updateCat(CatRecord $cat) {
-        $stmt = $this->db->prepare('UPDATE categories SET name = ?, updated = ?, sync_time = ?, client = ? WHERE user = ? AND id = ? AND updated < ?;');
+        $stmt = $this->db->prepare('UPDATE categories SET name = ?, sync_time = NOW(3), client = ? WHERE user = ? AND id = ? AND sync_time < SUBTIME(NOW(3), ? / 1000);');
         if($stmt) {
             try {
-                $now = self::getTimestamp();
-                $stmt->bind_param('sssiiis', $cat->name, $cat->updated, $now, $this->clientId, $this->userId, $cat->id, $cat->updated);
+                $stmt->bind_param('siiii', $cat->name, $this->clientId, $this->userId, $cat->id, $cat->age);
                 if($stmt->execute() && $stmt->affected_rows) {
                     $this->updateCatExtras($cat);
                     $this->updateCatFlavors($cat);
@@ -1190,10 +1182,10 @@ class DatabaseHelper {
      */
     private function deleteCat(CatRecord $cat) {
         $changed = 0;
-        $stmt = $this->db->prepare('DELETE FROM categories WHERE user = ? AND id = ? AND updated < ?;');
+        $stmt = $this->db->prepare('DELETE FROM categories WHERE user = ? AND id = ? AND sync_time < SUBTIME(NOW(3), ? / 1000);');
         if($stmt) {
             try {
-                $stmt->bind_param('iis', $this->userId, $cat->id, $cat->updated);
+                $stmt->bind_param('iii', $this->userId, $cat->id, $cat->age);
                 $stmt->execute();
                 $changed = $stmt->affected_rows;
             } finally {
@@ -1202,14 +1194,11 @@ class DatabaseHelper {
         }
 
         if($changed) {
-            $stmt = $this->db->prepare('INSERT INTO deleted (user, type, uuid, sync_time, client) VALUES (?, \'cat\', ?, ?, ?);');
+            $stmt = $this->db->prepare('INSERT INTO deleted (user, type, uuid, client) VALUES (?, \'cat\', ?, ?);');
             if($stmt) {
                 try {
-                    $now = self::getTimestamp();
-                    $stmt->bind_param('issi', $this->userId, $cat->uuid, $now, $this->clientId);
-                    $stmt->execute();
-
-                    return true;
+                    $stmt->bind_param('isi', $this->userId, $cat->uuid, $this->clientId);
+                    return $stmt->execute();
                 } finally {
                     $stmt->close();
                 }
@@ -1254,15 +1243,6 @@ class DatabaseHelper {
         }
 
         return 0;
-    }
-
-    /**
-     * Get the current Unix timestamp with milliseconds.
-     * 
-     * @return int The current Unix timestamp with milliseconds
-     */
-    private static function getTimestamp() {
-        return floor(microtime(true) * 1000);
     }
 
 }

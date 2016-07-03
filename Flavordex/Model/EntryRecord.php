@@ -72,7 +72,7 @@ class EntryRecord extends Model {
     /**
      * @var int
      */
-    public $updated;
+    public $age;
 
     /**
      * @var boolean

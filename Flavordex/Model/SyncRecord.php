@@ -10,22 +10,22 @@ namespace Flavordex\Model;
 class SyncRecord extends Model {
 
     /**
-     * @var string[] UUIDs of deleted categories
+     * @var array[string]int Map of category UUIDs to update ages
      */
     public $deletedCats;
 
     /**
-     * @var array[string]int Map of category UUIDs to update timestamps
+     * @var array[string]int Map of category UUIDs to update ages
      */
     public $updatedCats;
 
     /**
-     * @var string[] UUIDs of deleted entries
+     * @var array[string]int Map of entry UUIDs to update ages
      */
     public $deletedEntries;
 
     /**
-     * @var array[string]int Map of entry UUIDs to update timestamps
+     * @var array[string]int Map of entry UUIDs to update ages
      */
     public $updatedEntries;
 
