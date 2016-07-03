@@ -18,6 +18,11 @@ use Flavordex\Model\RegistrationRecord;
 class DatabaseHelper {
 
     /**
+     * @var int The number of seconds to persist a lock with no activity
+     */
+    private static $lockTimeout = Config::LOCK_TIMEOUT;
+
+    /**
      * @var mysqli The database connection
      */
     private $db;
@@ -83,7 +88,7 @@ class DatabaseHelper {
         $stmt = $this->db->prepare('UPDATE clients SET lock_expire = TIMESTAMPADD(SECOND, ?, NOW(3)) WHERE id = ? AND user = ? AND NOT EXISTS (SELECT 1 WHERE user = ? AND lock_expire > NOW(3) LIMIT 1);');
         if($stmt) {
             try {
-                $stmt->bind_param('iiii', Config::LOCK_TIMEOUT, $this->clientId, $this->userId, $this->userId);
+                $stmt->bind_param('iiii', self::$lockTimeout, $this->clientId, $this->userId, $this->userId);
                 if($stmt->execute()) {
                     return $stmt->affected_rows > 0;
                 }
@@ -119,7 +124,7 @@ class DatabaseHelper {
         $stmt = $this->db->prepare('UPDATE clients SET lock_expire = TIMESTAMPADD(SECOND, ?, NOW(3)) WHERE id = ? AND user = ? AND lock_expire > NOW(3);');
         if($stmt) {
             try {
-                $stmt->bind_param('iii', Config::LOCK_TIMEOUT, $this->clientId, $this->userId);
+                $stmt->bind_param('iii', self::$lockTimeout, $this->clientId, $this->userId);
                 if($stmt->execute()) {
                     return $stmt->affected_rows > 0;
                 }
