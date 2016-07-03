@@ -541,12 +541,13 @@ class DatabaseHelper {
                         $stmt->bind_result($id);
                         if($stmt->fetch()) {
                             $entry->cat = $id;
-                            $success = $this->insertEntry($entry);
                         }
                     }
                 } finally {
                     $stmt->close();
                 }
+
+                $success = $entry->cat && $this->insertEntry($entry);
             }
         } else {
             $success = $this->updateEntry($entry);
@@ -984,18 +985,18 @@ class DatabaseHelper {
                     if($stmt->fetch()) {
                         $cat->id = $id;
                     }
-
-                    if($cat->deleted) {
-                        $success = $this->deleteCat($cat);
-                    } elseif(!$cat->id) {
-                        $success = $this->insertCat($cat);
-                    } else {
-                        $success = $this->updateCat($cat);
-                    }
                 }
             } finally {
                 $stmt->close();
             }
+        }
+
+        if($cat->deleted) {
+            $success = $this->deleteCat($cat);
+        } elseif(!$cat->id) {
+            $success = $this->insertCat($cat);
+        } else {
+            $success = $this->updateCat($cat);
         }
 
         $this->db->autocommit(true);
