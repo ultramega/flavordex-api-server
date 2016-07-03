@@ -63,9 +63,6 @@ header('Content-Type: text/plain; charset=utf-8');
 $response = call_user_func_array(array($endpointObject, $method), $params);
 if($response !== false && $response !== null) {
     if(is_array($response) || is_object($response)) {
-        if($response instanceof Flavordex\Model\UpdateRecord){
-            file_put_contents('debug.log', print_r($response, true) . PHP_EOL . json_encode($response, JSON_PRETTY_PRINT));
-        }
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode($response);
     } else {
