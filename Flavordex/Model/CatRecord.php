@@ -44,4 +44,20 @@ class CatRecord extends Model {
      */
     public $flavors;
 
+    protected function parseJson(\stdClass $json) {
+        parent::parseJson($json);
+        if(is_array($json->extras)) {
+            $this->extras = array();
+            foreach($json->extras as $extra) {
+                $this->extras[] = new ExtraRecord($extra);
+            }
+        }
+        if(is_array($json->flavors)) {
+            $this->flavors = array();
+            foreach($json->flavors as $flavor) {
+                $this->flavors[] = new FlavorRecord($flavor);
+            }
+        }
+    }
+
 }
