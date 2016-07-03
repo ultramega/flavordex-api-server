@@ -368,6 +368,7 @@ class DatabaseHelper {
             try {
                 $stmt->bind_param('si', $entryUuid, $this->userId);
                 if($stmt->execute()) {
+                    $stmt->store_result();
                     $stmt->bind_result($id, $uuid, $cat, $catUuid, $title, $maker, $origin, $price, $location, $date, $rating, $notes, $age, $shared);
                     if($stmt->fetch()) {
                         $record = new EntryRecord();
@@ -389,7 +390,7 @@ class DatabaseHelper {
                         $record->extras = $this->getEntryExtras($id);
                         $record->flavors = $this->getEntryFlavors($id);
                         $record->photos = $this->getEntryPhotos($id);
-
+                        
                         return $record;
                     }
                 }
@@ -530,22 +531,22 @@ class DatabaseHelper {
 
         if($entry->deleted) {
             $success = $this->deleteEntry($entry);
-        } elseif($entry->id == 0) {
+        } elseif(!$entry->id) {
             $stmt = $this->db->prepare('SELECT id FROM categories WHERE uuid = ? AND user = ?;');
             if($stmt) {
                 try {
                     $stmt->bind_param('si', $entry->catUuid, $this->userId);
                     if($stmt->execute()) {
+                        $stmt->store_result();
                         $stmt->bind_result($id);
                         if($stmt->fetch()) {
                             $entry->cat = $id;
+                            $success = $entry->cat && $this->insertEntry($entry);
                         }
                     }
                 } finally {
                     $stmt->close();
                 }
-
-                $success = $entry->cat && $this->insertEntry($entry);
             }
         } else {
             $success = $this->updateEntry($entry);
@@ -659,9 +660,9 @@ class DatabaseHelper {
         if($stmt) {
             try {
                 $stmt->bind_param('i', $entry->id);
-                $stmt->execute();
-
-                $this->insertEntryExtras($entry);
+                if($stmt->execute()) {
+                    $this->insertEntryExtras($entry);
+                }
             } finally {
                 $stmt->close();
             }
@@ -705,9 +706,9 @@ class DatabaseHelper {
         if($stmt) {
             try {
                 $stmt->bind_param('i', $entry->id);
-                $stmt->execute();
-
-                $this->insertEntryFlavors($entry);
+                if($stmt->execute()) {
+                    $this->insertEntryFlavors($entry);
+                }
             } finally {
                 $stmt->close();
             }
@@ -751,9 +752,9 @@ class DatabaseHelper {
         if($stmt) {
             try {
                 $stmt->bind_param('i', $entry->id);
-                $stmt->execute();
-
-                $this->insertEntryPhotos($entry);
+                if($stmt->execute()) {
+                    $this->insertEntryPhotos($entry);
+                }
             } finally {
                 $stmt->close();
             }
@@ -873,6 +874,7 @@ class DatabaseHelper {
             try {
                 $stmt->bind_param('si', $catUuid, $this->userId);
                 if($stmt->execute()) {
+                    $stmt->store_result();
                     $stmt->bind_result($id, $uuid, $name, $age);
                     if($stmt->fetch()) {
                         $record = new CatRecord();
@@ -979,22 +981,23 @@ class DatabaseHelper {
             try {
                 $stmt->bind_param('si', $cat->uuid, $this->userId);
                 if($stmt->execute()) {
+                    $stmt->store_result();
                     $stmt->bind_result($id);
                     if($stmt->fetch()) {
                         $cat->id = $id;
+                    }
+
+                    if($cat->deleted) {
+                        $success = $this->deleteCat($cat);
+                    } elseif(!$cat->id) {
+                        $success = $this->insertCat($cat);
+                    } else {
+                        $success = $this->updateCat($cat);
                     }
                 }
             } finally {
                 $stmt->close();
             }
-        }
-
-        if($cat->deleted) {
-            $success = $this->deleteCat($cat);
-        } elseif(!$cat->id) {
-            $success = $this->insertCat($cat);
-        } else {
-            $success = $this->updateCat($cat);
         }
 
         $this->db->autocommit(true);
@@ -1112,6 +1115,7 @@ class DatabaseHelper {
                     $stmt2 = $this->db->prepare('DELETE FROM extras WHERE id = ?;');
                     if($stmt2) {
                         try {
+                            $stmt->store_result();
                             $stmt->bind_result($id, $uuid);
                             while($stmt->fetch()) {
                                 if(!array_key_exists($uuid, $catUuids)) {
@@ -1169,9 +1173,9 @@ class DatabaseHelper {
         if($stmt) {
             try {
                 $stmt->bind_param('i', $cat->id);
-                $stmt->execute();
-
-                $this->insertCatFlavors($cat);
+                if($stmt->execute()) {
+                    $this->insertCatFlavors($cat);
+                }
             } finally {
                 $stmt->close();
             }
@@ -1224,20 +1228,22 @@ class DatabaseHelper {
         if($stmt) {
             try {
                 $stmt->bind_param('s', $authId);
-                $stmt->execute();
-                $stmt->bind_result($id);
-                if($stmt->fetch()) {
-                    return $id;
-                } else {
-                    $stmt2 = $this->db->prepare('INSERT INTO users (email, uid) VALUES (?, ?) ON DUPLICATE KEY UPDATE uid = ?;');
-                    if($stmt2) {
-                        try {
-                            $stmt2->bind_param('sss', $email, $authId, $authId);
-                            if($stmt2->execute()) {
-                                return $stmt2->insert_id;
+                if($stmt->execute()) {
+                    $stmt->store_result();
+                    $stmt->bind_result($id);
+                    if($stmt->fetch()) {
+                        return $id;
+                    } else {
+                        $stmt2 = $this->db->prepare('INSERT INTO users (email, uid) VALUES (?, ?) ON DUPLICATE KEY UPDATE uid = ?;');
+                        if($stmt2) {
+                            try {
+                                $stmt2->bind_param('sss', $email, $authId, $authId);
+                                if($stmt2->execute()) {
+                                    return $stmt2->insert_id;
+                                }
+                            } finally {
+                                $stmt2->close();
                             }
-                        } finally {
-                            $stmt2->close();
                         }
                     }
                 }
