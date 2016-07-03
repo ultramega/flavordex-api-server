@@ -729,7 +729,7 @@ class DatabaseHelper {
         if($stmt) {
             try {
                 foreach($entry->photos as $photo) {
-                    $stmt->bind_param('isii', $entry->id, $photo->hash, $photo->driveId, $photo->pos);
+                    $stmt->bind_param('issi', $entry->id, $photo->hash, $photo->driveId, $photo->pos);
                     $stmt->execute();
                 }
             } finally {
