@@ -170,6 +170,7 @@ class SyncEndpoint extends Endpoint {
         );
         $content = array(
             'collapse_key' => 'requestKey',
+            'delay_while_idle' => true,
             'registration_ids' => array()
         );
 
