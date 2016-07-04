@@ -160,11 +160,11 @@ class SyncEndpoint extends Endpoint {
      * @param DatabaseHelper $helper
      */
     private static function notifyClients(DatabaseHelper $helper) {
-        $opts = array('https' => array(
+        $opts = array('http' => array(
                 'method' => 'POST',
                 'header' => array(
-                    'Authorization' => 'key=' . Config::FCM_API_KEY,
-                    'Content-Type' => 'application/json'
+                    'Authorization: key=' . Config::FCM_API_KEY,
+                    'Content-Type: application/json'
                 )
             )
         );
@@ -179,7 +179,7 @@ class SyncEndpoint extends Endpoint {
             $fcmIds[] = $id;
         }
 
-        $opts['https']['content'] = json_encode($content);
+        $opts['http']['content'] = json_encode($content);
         $context = stream_context_create($opts);
         $response = json_decode(file_get_contents('https://fcm.googleapis.com/fcm/send', false, $context));
 
