@@ -163,7 +163,7 @@ class SyncEndpoint extends Endpoint {
         $opts = array('https' => array(
                 'method' => 'POST',
                 'header' => array(
-                    'Authorization' => Config::FCM_API_KEY,
+                    'Authorization' => 'key=' . Config::FCM_API_KEY,
                     'Content-Type' => 'application/json'
                 )
             )
