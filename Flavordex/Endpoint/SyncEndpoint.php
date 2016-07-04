@@ -175,8 +175,10 @@ class SyncEndpoint extends Endpoint {
 
         $fcmIds = array();
         foreach($helper->listFcmIds() as $id => $fcmId) {
-            $content['registration_ids'][] = $fcmId;
-            $fcmIds[] = $id;
+            if($id != $helper->getClientId()) {
+                $content['registration_ids'][] = $fcmId;
+                $fcmIds[] = $id;
+            }
         }
 
         $opts['http']['content'] = json_encode($content);
