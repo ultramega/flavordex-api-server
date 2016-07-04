@@ -31,16 +31,16 @@ class SyncRecord extends Model {
 
     protected function parseJson(\stdClass $json) {
         parent::parseJson($json);
-        if(is_array($json->deletedCats)) {
+        if(isset($json->deletedCats) && is_array($json->deletedCats)) {
             $this->deletedCats = $json->deletedCats;
         }
-        if(is_array($json->updatedCats)) {
+        if(isset($json->updatedCats) && is_array($json->updatedCats)) {
             $this->updatedCats = $json->updatedCats;
         }
-        if(is_array($json->deletedEntries)) {
+        if(isset($json->deletedEntries) && is_array($json->deletedEntries)) {
             $this->deletedEntries = $json->deletedEntries;
         }
-        if(is_array($json->updatedEntries)) {
+        if(isset($json->updatedEntries) && is_array($json->updatedEntries)) {
             $this->updatedEntries = $json->updatedEntries;
         }
     }
