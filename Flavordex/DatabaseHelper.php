@@ -56,9 +56,13 @@ class DatabaseHelper {
      * Set the user to perform authorized requests.
      *
      * @param Auth $auth The authentication data for the user
+     * @throws UnauthorizedException
      */
     public function setUser(Auth $auth) {
         $this->userId = $this->getUserId($auth->getUid(), $auth->getEmail());
+        if(!$this->userId) {
+            throw new UnauthorizedException('User not found');
+        }
     }
 
     /**
@@ -390,7 +394,7 @@ class DatabaseHelper {
                         $record->extras = $this->getEntryExtras($id);
                         $record->flavors = $this->getEntryFlavors($id);
                         $record->photos = $this->getEntryPhotos($id);
-                        
+
                         return $record;
                     }
                 }
