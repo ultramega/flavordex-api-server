@@ -56,13 +56,9 @@ class DatabaseHelper {
      * Set the user to perform authorized requests.
      *
      * @param Auth $auth The authentication data for the user
-     * @throws UnauthorizedException
      */
     public function setUser(Auth $auth) {
         $this->userId = $this->getUserId($auth->getUid(), $auth->getEmail());
-        if(!$this->userId) {
-            throw new UnauthorizedException('User not found');
-        }
     }
 
     /**
@@ -78,9 +74,24 @@ class DatabaseHelper {
      * Set the client to make requests.
      *
      * @param int $clientId The database ID of the client
+     * @throws UnauthorizedException
      */
     public function setClientId($clientId) {
         $this->clientId = (int)$clientId;
+
+        $stmt = $this->db->prepare('SELECT 1 FROM clients WHERE id = ? AND user = ?;');
+        if($stmt) {
+            try {
+                $stmt->bind_param('ii', $this->clientId, $this->userId);
+                if($stmt->execute() && $stmt->fetch()) {
+                    return;
+                }
+            } finally {
+                $stmt->close();
+            }
+        }
+
+        throw new UnauthorizedException('Client not registered.');
     }
 
     /**
