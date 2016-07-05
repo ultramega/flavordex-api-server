@@ -160,6 +160,11 @@ class SyncEndpoint extends Endpoint {
      * @param DatabaseHelper $helper
      */
     private static function notifyClients(DatabaseHelper $helper) {
+        $clients = $helper->listFcmIds();
+        if(count($clients) < 2) {
+            return;
+        }
+
         $opts = array('http' => array(
                 'method' => 'POST',
                 'header' => array(
@@ -175,7 +180,7 @@ class SyncEndpoint extends Endpoint {
         );
 
         $fcmIds = array();
-        foreach($helper->listFcmIds() as $id => $fcmId) {
+        foreach($clients as $id => $fcmId) {
             if($id != $helper->getClientId()) {
                 $content['registration_ids'][] = $fcmId;
                 $fcmIds[] = $id;
