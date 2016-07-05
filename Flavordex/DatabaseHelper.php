@@ -100,7 +100,7 @@ class DatabaseHelper {
      * @return boolean Whether the lock was successfully obtained
      */
     public function getLock() {
-        $stmt = $this->db->prepare('UPDATE clients SET lock_expire = TIMESTAMPADD(SECOND, ?, NOW(3)) WHERE id = ? AND user = ? AND NOT EXISTS (SELECT 1 WHERE user = ? AND lock_expire > NOW(3) LIMIT 1);');
+        $stmt = $this->db->prepare('UPDATE clients SET lock_expire = TIMESTAMPADD(SECOND, ?, NOW(3)) WHERE id = ? AND user = ? AND NOT EXISTS (SELECT 1 FROM (SELECT 1 FROM clients WHERE user = ? AND lock_expire > NOW(3) LIMIT 1) AS t);');
         if($stmt) {
             try {
                 $stmt->bind_param('iiii', self::$lockTimeout, $this->clientId, $this->userId, $this->userId);
