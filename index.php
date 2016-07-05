@@ -6,8 +6,9 @@ use Flavordex\Exception\InternalErrorException;
 use Flavordex\Exception\NotFoundException;
 
 spl_autoload_register(function ($className) {
-    if(file_exists($className . '.php')) {
-        require_once str_replace('\\', DIRECTORY_SEPARATOR, $className) . '.php';
+    $filePath = str_replace('\\', DIRECTORY_SEPARATOR, $className) . '.php';
+    if(file_exists($filePath)) {
+        require_once $filePath;
     }
 });
 
