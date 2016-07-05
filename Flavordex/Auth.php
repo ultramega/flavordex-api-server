@@ -23,17 +23,10 @@ class Auth {
     private $uid;
 
     /**
-     * @var string The user's email address
-     */
-    private $email;
-
-    /**
      * @param string $uid The unique ID of the user
-     * @param string $email The user's email address
      */
-    private function __construct($uid, $email) {
+    private function __construct($uid) {
         $this->uid = $uid;
-        $this->email = $email;
     }
 
     /**
@@ -55,7 +48,7 @@ class Auth {
             if(empty($jwt->sub)) {
                 throw new UnauthorizedException('User not specified');
             }
-            self::$instance = new Auth($jwt->sub, isset($jwt->email) ? $jwt->email : null);
+            self::$instance = new Auth($jwt->sub);
         }
         return self::$instance;
     }
@@ -67,15 +60,6 @@ class Auth {
      */
     public function getUid() {
         return $this->uid;
-    }
-
-    /**
-     * Get the user's email address.
-     * 
-     * @return string The user's email address
-     */
-    public function getEmail() {
-        return $this->email;
     }
 
 }

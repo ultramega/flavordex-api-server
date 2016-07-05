@@ -58,7 +58,7 @@ class DatabaseHelper {
      * @param Auth $auth The authentication data for the user
      */
     public function setUser(Auth $auth) {
-        $this->userId = $this->getUserId($auth->getUid(), $auth->getEmail());
+        $this->userId = $this->getUserId($auth->getUid());
     }
 
     /**
@@ -1235,10 +1235,9 @@ class DatabaseHelper {
      * Get the database ID of a user, creating one if it doesn't exist.
      *
      * @param string $authId The authentication ID for the user
-     * @param string $email The user's email address
      * @return int The user's database ID
      */
-    private function getUserId($authId, $email) {
+    private function getUserId($authId) {
         $stmt = $this->db->prepare('SELECT id FROM users WHERE uid = ?;');
         if($stmt) {
             try {
@@ -1249,10 +1248,10 @@ class DatabaseHelper {
                     if($stmt->fetch()) {
                         return $id;
                     } else {
-                        $stmt2 = $this->db->prepare('INSERT INTO users (email, uid) VALUES (?, ?) ON DUPLICATE KEY UPDATE uid = ?;');
+                        $stmt2 = $this->db->prepare('INSERT INTO users (uid) VALUES (?);');
                         if($stmt2) {
                             try {
-                                $stmt2->bind_param('sss', $email, $authId, $authId);
+                                $stmt2->bind_param('s', $authId);
                                 if($stmt2->execute()) {
                                     return $stmt2->insert_id;
                                 }
