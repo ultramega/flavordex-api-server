@@ -14,10 +14,10 @@ This is the backend server that the Flavordex app uses to sync journal data.
 
 ## Setup
 
-   * Import the *flavordex2.sql* file into a database using the method of your choice.
-   * Rename *Config.php.sample* to *Config.php* (located in *web/Flavordex*).
-   * Edit *Config.php* with your configuration parameters.
-   * Place the contents of the *web/* directory in a Web accessible location.
+   * Import the **flavordex2.sql** file into a database using the method of your choice.
+   * Rename **Config.php.sample** to **Config.php** (located in **web/Flavordex**).
+   * Edit **Config.php** with your configuration parameters.
+   * Place the contents of the **web/** directory in a Web accessible location.
 
 ## License
 
