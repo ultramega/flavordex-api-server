@@ -1,0 +1,47 @@
+<?php
+
+namespace Flavordex;
+
+/**
+ * Application configuration constants.
+ * 
+ * @author Steve Guidetti
+ */
+class Config {
+
+    /**
+     * The hostname of the MySQL server.
+     */
+    const DB_HOST = '';
+    
+    /**
+     * The name of the MySQL user.
+     */
+    const DB_USER = '';
+    
+    /**
+     * The password for the MySQL user.
+     */
+    const DB_PASS = '';
+    
+    /**
+     * The name of the MySQL database.
+     */
+    const DB_DATABASE = '';
+    
+    /**
+     * The Firebase Cloud Messaging server key.
+     */
+    const FCM_API_KEY = '';
+    
+    /**
+     * The Firebase project ID.
+     */
+    const FB_PROJECT_ID = '';
+    
+    /**
+     * The amount of time in seconds of no activity before automatically releasing a lock.
+     */
+    const LOCK_TIMEOUT = 30;
+
+}
