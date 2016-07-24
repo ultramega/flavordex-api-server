@@ -18,6 +18,7 @@ This is the backend server that the Flavordex app uses to sync journal data.
    * Rename **Config.php.sample** to **Config.php** (located in **web/Flavordex**).
    * Edit **Config.php** with your configuration parameters.
    * Place the contents of the **web/** directory in a Web accessible location.
+   * If your server is not set up for SSL, remove `SSLRequireSSL` from **web/.htaccess**.
 
 ## License
 
