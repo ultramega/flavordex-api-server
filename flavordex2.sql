@@ -30,7 +30,7 @@ CREATE TABLE `clients` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `user` int(11) NOT NULL,
   `fcm_id` text NOT NULL,
-  `last_sync` timestamp(3) NOT NULL DEFAULT '0000-00-00 00:00:00.000',
+  `last_sync` timestamp(3) NOT NULL DEFAULT '1970-01-01 00:00:00.000',
   `lock_expire` timestamp(3) NULL DEFAULT NULL,
   `changes_pending` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
