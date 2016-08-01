@@ -179,7 +179,7 @@ class SyncEndpoint extends Endpoint {
     }
 
     /**
-     * Notify all clients belonging to the user the a sync is requested.
+     * Notify all clients belonging to the user that a sync is requested.
      * 
      * @param DatabaseHelper $helper
      */
