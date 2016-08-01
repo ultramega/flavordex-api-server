@@ -41,7 +41,7 @@ set_error_handler(function ($errno, $errstr, $errfile, $errline, $errcontext) {
     return false;
 });
 
-set_exception_handler(function (\Exception $exception) {
+set_exception_handler(function ($exception) {
     if($exception instanceof HttpException) {
         $exception->output();
     }
