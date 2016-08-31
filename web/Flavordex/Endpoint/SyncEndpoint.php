@@ -29,10 +29,14 @@ namespace Flavordex\Endpoint;
 use Flavordex\Config;
 use Flavordex\DatabaseHelper;
 use Flavordex\Exception\LockedException;
+use Flavordex\Exception\NotFoundException;
+use Flavordex\Exception\UnauthorizedException;
 use Flavordex\Model\CatRecord;
 use Flavordex\Model\EntryRecord;
 use Flavordex\Model\SyncRecord;
 use Flavordex\Model\UpdateResponse;
+use Flavordex\Util\EntryMeta;
+use Flavordex\Util\FileManager;
 
 /**
  * The sync endpoint for synchronizing journal data between the client and the server.
@@ -43,7 +47,7 @@ class SyncEndpoint extends Endpoint {
 
     /**
      * Start a synchronization session.
-     * 
+     *
      * @param int $clientId The database ID of the client
      * @throws LockedException
      */
@@ -61,7 +65,7 @@ class SyncEndpoint extends Endpoint {
 
     /**
      * End the synchronization session.
-     * 
+     *
      * @param int $clientId The database ID of the client
      */
     public function endSync($clientId) {
@@ -83,7 +87,7 @@ class SyncEndpoint extends Endpoint {
 
     /**
      * Get a list of deleted and updated categories and entries.
-     * 
+     *
      * @param int $clientId The database ID of the client
      * @return SyncRecord
      */
@@ -101,7 +105,7 @@ class SyncEndpoint extends Endpoint {
 
     /**
      * Get a single category.
-     * 
+     *
      * @param int $clientId The database ID of the client
      * @param string $catUuid The UUID of the category
      * @return CatRecord
@@ -113,7 +117,7 @@ class SyncEndpoint extends Endpoint {
 
     /**
      * Send a single category.
-     * 
+     *
      * @param int $clientId The database ID of the client
      * @return UpdateResponse
      */
@@ -131,7 +135,7 @@ class SyncEndpoint extends Endpoint {
 
     /**
      * Get a single entry.
-     * 
+     *
      * @param int $clientId The database ID of the client
      * @param string $entryUuid The UUID of the entry
      * @return EntryRecord
@@ -143,7 +147,7 @@ class SyncEndpoint extends Endpoint {
 
     /**
      * Send a single entry.
-     * 
+     *
      * @param int $clientId The database ID of the client
      * @return UpdateResponse
      */
@@ -156,12 +160,54 @@ class SyncEndpoint extends Endpoint {
         $response->success = $helper->pushEntry($entry);
         $response->remoteId = $entry->id;
 
+        if($entry->shared) {
+            $meta = new EntryMeta();
+            $meta->id = $entry->id;
+            $meta->catId = $entry->cat;
+            $meta->userId = $helper->getUserId();
+
+            $hash = FileManager::getHash($meta);
+            $hasPhoto = !empty($entry->photos);
+            if($hash != null) {
+                if(!$hasPhoto) {
+                    FileManager::deletePosterImage($meta);
+                } elseif($hash != $entry->photos[0]->hash) {
+                    $response->posterChanged = true;
+                }
+            } elseif($hasPhoto) {
+                $response->posterChanged = true;
+            }
+        }
+
         return $response;
     }
 
     /**
+     * Send the poster image for an entry.
+     *
+     * @param type $entryUuid The UUID of the entry
+     * @param type $photoHash The hash identifying the image
+     */
+    public function putPosterImage($entryUuid, $photoHash) {
+        self::requirePost();
+        $auth = self::getAuth();
+        $helper = new DatabaseHelper();
+        $helper->setUser($auth);
+
+        $entry = $helper->getEntryMeta($entryUuid);
+        if(!$entry) {
+            throw new NotFoundException();
+        }
+        if($entry->userId != $helper->getUserId()) {
+            throw new UnauthorizedException();
+        }
+        $imageBlob = file_get_contents('php://input');
+        FileManager::putPosterImage($imageBlob, $photoHash, $entry);
+    }
+
+    /**
      * Get an authenticated database helper and refresh the exclusive lock.
-     * 
+     *
      * @param int $clientId The database ID of the client
      * @return DatabaseHelper
      * @throws LockedException
@@ -180,7 +226,7 @@ class SyncEndpoint extends Endpoint {
 
     /**
      * Notify all clients belonging to the user that a sync is requested.
-     * 
+     *
      * @param DatabaseHelper $helper
      */
     private static function notifyClients(DatabaseHelper $helper) {

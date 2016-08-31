@@ -33,6 +33,7 @@ use Flavordex\Model\ExtraRecord;
 use Flavordex\Model\FlavorRecord;
 use Flavordex\Model\PhotoRecord;
 use Flavordex\Model\RegistrationRecord;
+use Flavordex\Util\EntryMeta;
 
 /**
  * Database access helper.
@@ -77,12 +78,21 @@ class DatabaseHelper {
     }
 
     /**
+     * Get the current user ID.
+     *
+     * @return int The database ID of the client.
+     */
+    public function getUserId() {
+        return $this->userId;
+    }
+
+    /**
      * Set the user to perform authorized requests.
      *
      * @param Auth $auth The authentication data for the user
      */
     public function setUser(Auth $auth) {
-        $this->userId = $this->getUserId($auth->getUid());
+        $this->userId = $this->findUserId($auth->getUid());
     }
 
     /**
@@ -120,7 +130,7 @@ class DatabaseHelper {
 
     /**
      * Obtain an exclusive lock for the client of the user.
-     * 
+     *
      * @return boolean Whether the lock was successfully obtained
      */
     public function getLock() {
@@ -156,7 +166,7 @@ class DatabaseHelper {
 
     /**
      * Update the exclusive lock expiration time for the client.
-     * 
+     *
      * @return boolean Whether the client still has a lock
      */
     public function touchLock() {
@@ -177,7 +187,7 @@ class DatabaseHelper {
 
     /**
      * Check whether there are pending changes from the client.
-     * 
+     *
      * @return boolean
      */
     public function changesPending() {
@@ -391,8 +401,38 @@ class DatabaseHelper {
     }
 
     /**
+     * Get the metadata of an entry based on the entry UUID.
+     *
+     * @param type $entryUuid The UUID of the entry
+     * @return EntryMeta
+     */
+    public function getEntryMeta($entryUuid) {
+        $stmt = $this->db->prepare('SELECT id, user, cat FROM entries WHERE uuid = ? LIMIT 1;');
+        if($stmt) {
+            try {
+                $stmt->bind_param('s', $entryUuid);
+                if($stmt->execute()) {
+                    $stmt->bind_result($id, $user, $cat);
+                    if($stmt->fetch()) {
+                        $record = new EntryMeta();
+                        $record->id = $id;
+                        $record->userId = $user;
+                        $record->catId = $cat;
+
+                        return $record;
+                    }
+                }
+            } finally {
+                $stmt->close();
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Get a single entry.
-     * 
+     *
      * @param type $entryUuid The UUID of the entry
      * @return EntryRecord
      * @throws UnauthorizedException
@@ -808,7 +848,7 @@ class DatabaseHelper {
 
     /**
      * Set the publish time for a newly shared entry.
-     * 
+     *
      * @param EntryRecord $entry
      */
     private function setPublishTime(EntryRecord $entry) {
@@ -921,7 +961,7 @@ class DatabaseHelper {
 
     /**
      * Get a single category.
-     * 
+     *
      * @param type $catUuid The UUID of the category
      * @return CatRecord
      * @throws UnauthorizedException
@@ -1284,7 +1324,7 @@ class DatabaseHelper {
      * @param string $authId The authentication ID for the user
      * @return int The user's database ID
      */
-    private function getUserId($authId) {
+    private function findUserId($authId) {
         $stmt = $this->db->prepare('SELECT id FROM users WHERE uid = ?;');
         if($stmt) {
             try {

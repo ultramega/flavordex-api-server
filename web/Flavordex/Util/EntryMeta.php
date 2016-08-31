@@ -24,53 +24,28 @@
  * THE SOFTWARE.
  */
 
-namespace Flavordex;
+namespace Flavordex\Util;
 
 /**
- * Application configuration constants.
+ * Holds metadata for an entry.
  *
  * @author Steve Guidetti
  */
-class Config {
+class EntryMeta {
 
     /**
-     * The hostname of the MySQL server.
+     * @var int The database ID of the entry
      */
-    const DB_HOST = '';
+    public $id;
 
     /**
-     * The name of the MySQL user.
+     * @var int The database ID of the user that owns the entry
      */
-    const DB_USER = '';
+    public $userId;
 
     /**
-     * The password for the MySQL user.
+     * @var int The database ID of the category
      */
-    const DB_PASS = '';
-
-    /**
-     * The name of the MySQL database.
-     */
-    const DB_DATABASE = '';
-
-    /**
-     * The Firebase Cloud Messaging server key.
-     */
-    const FCM_API_KEY = '';
-
-    /**
-     * The Firebase project ID.
-     */
-    const FB_PROJECT_ID = '';
-
-    /**
-     * The amount of time in seconds of no activity before automatically releasing a lock.
-     */
-    const LOCK_TIMEOUT = 30;
-
-    /**
-     * The path to the directory where files are stored.
-     */
-    const FILES_DIR = 'files';
+    public $catId;
 
 }

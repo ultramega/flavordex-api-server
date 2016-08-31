@@ -43,4 +43,9 @@ class UpdateResponse extends Model {
      */
     public $remoteId;
 
+    /**
+     * @var boolean
+     */
+    public $posterChanged;
+
 }
