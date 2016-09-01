@@ -85,7 +85,9 @@ class FileManager {
      * @param EntryMeta $entry The entry metadata
      */
     public static function deletePosterImage(EntryMeta $entry) {
-        array_map('unlink', glob(self::getEntryPath($entry) . '/poster*.*'));
+        $path = self::getEntryPath($entry);
+        array_map('unlink', glob($path . '/poster*.*', GLOB_NOSORT));
+        self::rmdirs($path);
     }
 
     /**
@@ -120,6 +122,21 @@ class FileManager {
             return mkdir($path);
         }
         return false;
+    }
+
+    /**
+     * Remove empty directories.
+     *
+     * @param string $path The path to the directory to check
+     */
+    private static function rmdirs($path) {
+        if(is_dir($path)) {
+            if(count(glob($path . '/*', GLOB_NOSORT)) > 0) {
+                return;
+            }
+            rmdir($path);
+        }
+        self::rmdirs(dirname($path));
     }
 
 }
