@@ -45,15 +45,20 @@ class FileManager {
      */
     public static function putPosterImage($imageBlob, $hash, EntryMeta $entry) {
         $path = self::getEntryPath($entry, true);
+        $meta = array('hash' => $hash);
+
         $image = new \Imagick();
         $image->readImageBlob($imageBlob);
         if($image->getImageWidth() > 900) {
             $image->scaleImage(900, 0);
         }
+        $meta['width'] = $image->getImageWidth();
+        $meta['height'] = $image->getImageHeight();
+
         $image->writeImage($path . '/poster.jpg');
         $image->destroy();
 
-        file_put_contents($path . '/poster.md5', $hash);
+        file_put_contents($path . '/poster.json', json_encode($meta));
     }
 
     /**
@@ -63,11 +68,15 @@ class FileManager {
      * @return string|null The hash or NULL if it does not exist
      */
     public static function getHash(EntryMeta $entry) {
-        $hashFile = self::getEntryPath($entry) . '/poster.md5';
+        $hashFile = self::getEntryPath($entry) . '/poster.json';
         if(!file_exists($hashFile)) {
             return null;
         }
-        return file_get_contents($hashFile);
+        $meta = json_decode(file_get_contents($hashFile));
+        if($meta) {
+            return $meta->hash;
+        }
+        return null;
     }
 
     /**
