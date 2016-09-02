@@ -130,6 +130,10 @@ class SyncEndpoint extends Endpoint {
         $response->success = $helper->pushCat($cat);
         $response->remoteId = $cat->id;
 
+        if($cat->deleted) {
+            FileManager::deleteCategoryFiles($helper->getUserId(), $cat->id);
+        }
+
         return $response;
     }
 
@@ -160,7 +164,7 @@ class SyncEndpoint extends Endpoint {
         $response->success = $helper->pushEntry($entry);
         $response->remoteId = $entry->id;
 
-        if($entry->shared) {
+        if($entry->shared || $entry->deleted) {
             $meta = new EntryMeta();
             $meta->id = $entry->id;
             $meta->catId = $entry->cat;
@@ -169,7 +173,7 @@ class SyncEndpoint extends Endpoint {
             $hash = FileManager::getHash($meta);
             $hasPhoto = !empty($entry->photos);
             if($hash != null) {
-                if(!$hasPhoto) {
+                if(!$hasPhoto || $entry->deleted) {
                     FileManager::deletePosterImage($meta);
                 } elseif($hash != $entry->photos[0]->hash) {
                     $response->posterChanged = true;

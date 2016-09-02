@@ -91,6 +91,23 @@ class FileManager {
     }
 
     /**
+     * Delete all files for a category.
+     *
+     * @param int $userId The database ID of the user
+     * @param int $catId The database ID of the category
+     */
+    public static function deleteCategoryFiles($userId, $catId) {
+        $path = sprintf('%s/%d/%d', Config::FILES_DIR, $userId, $catId);
+        foreach(glob($path . '/*/*', GLOB_NOSORT) as $file) {
+            unlink($file);
+        }
+        foreach(glob($path . '/*', GLOB_NOSORT) as $dir) {
+            rmdir($dir);
+        }
+        self::rmdirs($path);
+    }
+
+    /**
      * Get the path to the directory containing an entry's files.
      *
      * @param EntryMeta $entry The entry metadata
