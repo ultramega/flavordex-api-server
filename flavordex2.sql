@@ -50,7 +50,6 @@ CREATE TABLE `entries` (
   `notes` text,
   `sync_time` timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   `client` int(11) NOT NULL DEFAULT '0',
-  `shared` tinyint(1) NOT NULL DEFAULT '0',
   `publish_time` timestamp(3) NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 

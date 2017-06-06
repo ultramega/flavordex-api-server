@@ -101,11 +101,6 @@ class EntryRecord extends Model {
     /**
      * @var boolean
      */
-    public $shared;
-
-    /**
-     * @var boolean
-     */
     public $deleted;
 
     /**
