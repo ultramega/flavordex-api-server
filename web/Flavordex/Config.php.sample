@@ -68,9 +68,4 @@ class Config {
      */
     const LOCK_TIMEOUT = 30;
 
-    /**
-     * The path to the directory where files are stored.
-     */
-    const FILES_DIR = 'files';
-
 }

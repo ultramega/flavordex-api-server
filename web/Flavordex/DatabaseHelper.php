@@ -33,7 +33,6 @@ use Flavordex\Model\ExtraRecord;
 use Flavordex\Model\FlavorRecord;
 use Flavordex\Model\PhotoRecord;
 use Flavordex\Model\RegistrationRecord;
-use Flavordex\Util\EntryMeta;
 
 /**
  * Database access helper.
@@ -398,36 +397,6 @@ class DatabaseHelper {
         }
 
         return $records;
-    }
-
-    /**
-     * Get the metadata of an entry based on the entry UUID.
-     *
-     * @param type $entryUuid The UUID of the entry
-     * @return EntryMeta
-     */
-    public function getEntryMeta($entryUuid) {
-        $stmt = $this->db->prepare('SELECT id, user, cat FROM entries WHERE uuid = ? LIMIT 1;');
-        if($stmt) {
-            try {
-                $stmt->bind_param('s', $entryUuid);
-                if($stmt->execute()) {
-                    $stmt->bind_result($id, $user, $cat);
-                    if($stmt->fetch()) {
-                        $record = new EntryMeta();
-                        $record->id = $id;
-                        $record->userId = $user;
-                        $record->catId = $cat;
-
-                        return $record;
-                    }
-                }
-            } finally {
-                $stmt->close();
-            }
-        }
-
-        return null;
     }
 
     /**

@@ -29,14 +29,10 @@ namespace Flavordex\Endpoint;
 use Flavordex\Config;
 use Flavordex\DatabaseHelper;
 use Flavordex\Exception\LockedException;
-use Flavordex\Exception\NotFoundException;
-use Flavordex\Exception\UnauthorizedException;
 use Flavordex\Model\CatRecord;
 use Flavordex\Model\EntryRecord;
 use Flavordex\Model\SyncRecord;
 use Flavordex\Model\UpdateResponse;
-use Flavordex\Util\EntryMeta;
-use Flavordex\Util\FileManager;
 
 /**
  * The sync endpoint for synchronizing journal data between the client and the server.
@@ -130,10 +126,6 @@ class SyncEndpoint extends Endpoint {
         $response->success = $helper->pushCat($cat);
         $response->remoteId = $cat->id;
 
-        if($cat->deleted) {
-            FileManager::deleteCategoryFiles($helper->getUserId(), $cat->id);
-        }
-
         return $response;
     }
 
@@ -164,49 +156,7 @@ class SyncEndpoint extends Endpoint {
         $response->success = $helper->pushEntry($entry);
         $response->remoteId = $entry->id;
 
-        if($entry->shared || $entry->deleted) {
-            $meta = new EntryMeta();
-            $meta->id = $entry->id;
-            $meta->catId = $entry->cat;
-            $meta->userId = $helper->getUserId();
-
-            $hash = FileManager::getHash($meta);
-            $hasPhoto = !empty($entry->photos);
-            if($hash != null) {
-                if(!$hasPhoto || $entry->deleted) {
-                    FileManager::deletePosterImage($meta);
-                } elseif($hash != $entry->photos[0]->hash) {
-                    $response->posterChanged = true;
-                }
-            } elseif($hasPhoto) {
-                $response->posterChanged = true;
-            }
-        }
-
         return $response;
-    }
-
-    /**
-     * Send the poster image for an entry.
-     *
-     * @param type $entryUuid The UUID of the entry
-     * @param type $photoHash The hash identifying the image
-     */
-    public function putPosterImage($entryUuid, $photoHash) {
-        self::requirePost();
-        $auth = self::getAuth();
-        $helper = new DatabaseHelper();
-        $helper->setUser($auth);
-
-        $entry = $helper->getEntryMeta($entryUuid);
-        if(!$entry) {
-            throw new NotFoundException();
-        }
-        if($entry->userId != $helper->getUserId()) {
-            throw new UnauthorizedException();
-        }
-        $imageBlob = file_get_contents('php://input');
-        FileManager::putPosterImage($imageBlob, $photoHash, $entry);
     }
 
     /**
