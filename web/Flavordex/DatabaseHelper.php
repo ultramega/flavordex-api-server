@@ -411,13 +411,13 @@ class DatabaseHelper {
             throw new UnauthorizedException();
         }
 
-        $stmt = $this->db->prepare('SELECT a.id, a.uuid, a.cat, b.uuid, a.title, a.maker, a.origin, a.price, a.location, a.date, a.rating, a.notes, TIMESTAMPDIFF(MICROSECOND, a.sync_time, NOW(3)), a.shared FROM entries a LEFT JOIN categories b ON a.cat = b.id WHERE a.uuid = ? AND a.user = ? LIMIT 1;');
+        $stmt = $this->db->prepare('SELECT a.id, a.uuid, a.cat, b.uuid, a.title, a.maker, a.origin, a.price, a.location, a.date, a.rating, a.notes, TIMESTAMPDIFF(MICROSECOND, a.sync_time, NOW(3)) FROM entries a LEFT JOIN categories b ON a.cat = b.id WHERE a.uuid = ? AND a.user = ? LIMIT 1;');
         if($stmt) {
             try {
                 $stmt->bind_param('si', $entryUuid, $this->userId);
                 if($stmt->execute()) {
                     $stmt->store_result();
-                    $stmt->bind_result($id, $uuid, $cat, $catUuid, $title, $maker, $origin, $price, $location, $date, $rating, $notes, $age, $shared);
+                    $stmt->bind_result($id, $uuid, $cat, $catUuid, $title, $maker, $origin, $price, $location, $date, $rating, $notes, $age);
                     if($stmt->fetch()) {
                         $record = new EntryRecord();
                         $record->id = $id;
@@ -433,7 +433,6 @@ class DatabaseHelper {
                         $record->rating = $rating;
                         $record->notes = $notes;
                         $record->age = (int)($age / 1000);
-                        $record->shared = (boolean)$shared;
 
                         $record->extras = $this->getEntryExtras($id);
                         $record->flavors = $this->getEntryFlavors($id);
@@ -615,10 +614,10 @@ class DatabaseHelper {
      * @return boolean Whether the operation was successful
      */
     private function insertEntry(EntryRecord $entry) {
-        $stmt = $this->db->prepare('INSERT INTO entries (uuid, user, cat, title, maker, origin, price, location, date, rating, notes, client, shared) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);');
+        $stmt = $this->db->prepare('INSERT INTO entries (uuid, user, cat, title, maker, origin, price, location, date, rating, notes, client) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);');
         if($stmt) {
             try {
-                $stmt->bind_param('siissssssdsii', $entry->uuid, $this->userId, $entry->cat, $entry->title, $entry->maker, $entry->origin, $entry->price, $entry->location, $entry->date, $entry->rating, $entry->notes, $this->clientId, $entry->shared);
+                $stmt->bind_param('siissssssdsi', $entry->uuid, $this->userId, $entry->cat, $entry->title, $entry->maker, $entry->origin, $entry->price, $entry->location, $entry->date, $entry->rating, $entry->notes, $this->clientId);
                 if($stmt->execute()) {
                     $entry->id = $stmt->insert_id;
                     if($entry->id) {
@@ -652,10 +651,10 @@ class DatabaseHelper {
      * @return boolean Whether the operation was successful
      */
     private function updateEntry(EntryRecord $entry) {
-        $stmt = $this->db->prepare('UPDATE entries SET title = ?, maker = ?, origin = ?, price = ?, location = ?, date = ?, rating = ?, notes = ?, sync_time = NOW(3), client = ?, shared = ? WHERE user = ? AND id = ? AND sync_time < SUBTIME(NOW(3), ? / 1000);');
+        $stmt = $this->db->prepare('UPDATE entries SET title = ?, maker = ?, origin = ?, price = ?, location = ?, date = ?, rating = ?, notes = ?, sync_time = NOW(3), client = ? WHERE user = ? AND id = ? AND sync_time < SUBTIME(NOW(3), ? / 1000);');
         if($stmt) {
             try {
-                $stmt->bind_param('ssssssdsiiiii', $entry->title, $entry->maker, $entry->origin, $entry->price, $entry->location, $entry->date, $entry->rating, $entry->notes, $this->clientId, $entry->shared, $this->userId, $entry->id, $entry->age);
+                $stmt->bind_param('ssssssdsiiii', $entry->title, $entry->maker, $entry->origin, $entry->price, $entry->location, $entry->date, $entry->rating, $entry->notes, $this->clientId, $this->userId, $entry->id, $entry->age);
                 if($stmt->execute() && $stmt->affected_rows) {
                     $this->updateEntryExtras($entry);
                     $this->updateEntryFlavors($entry);
