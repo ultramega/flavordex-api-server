@@ -49,8 +49,7 @@ CREATE TABLE `entries` (
   `rating` decimal(5,1) NOT NULL DEFAULT '0.0',
   `notes` text,
   `sync_time` timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  `client` int(11) NOT NULL DEFAULT '0',
-  `publish_time` timestamp(3) NULL DEFAULT NULL
+  `client` int(11) NOT NULL DEFAULT '0'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 CREATE TABLE `entries_extras` (

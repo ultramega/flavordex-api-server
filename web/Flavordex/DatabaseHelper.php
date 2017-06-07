@@ -625,9 +625,6 @@ class DatabaseHelper {
                         $this->insertEntryExtras($entry);
                         $this->insertEntryFlavors($entry);
                         $this->insertEntryPhotos($entry);
-                        if($entry->shared) {
-                            $this->setPublishTime($entry);
-                        }
                     }
                 }
             } finally {
@@ -663,9 +660,6 @@ class DatabaseHelper {
                     $this->updateEntryExtras($entry);
                     $this->updateEntryFlavors($entry);
                     $this->updateEntryPhotos($entry);
-                    if($entry->shared) {
-                        $this->setPublishTime($entry);
-                    }
 
                     return true;
                 }
@@ -809,23 +803,6 @@ class DatabaseHelper {
                 if($stmt->execute()) {
                     $this->insertEntryPhotos($entry);
                 }
-            } finally {
-                $stmt->close();
-            }
-        }
-    }
-
-    /**
-     * Set the publish time for a newly shared entry.
-     *
-     * @param EntryRecord $entry
-     */
-    private function setPublishTime(EntryRecord $entry) {
-        $stmt = $this->db->prepare('UPDATE entries SET publish_time = NOW(3) WHERE id = ? AND publish_time IS NULL;');
-        if($stmt) {
-            try {
-                $stmt->bind_param('i', $entry->id);
-                $stmt->execute();
             } finally {
                 $stmt->close();
             }
