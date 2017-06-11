@@ -614,7 +614,7 @@ class DatabaseHelper {
      * @return boolean Whether the operation was successful
      */
     private function insertEntry(EntryRecord $entry) {
-        $stmt = $this->db->prepare('INSERT INTO entries (uuid, user, cat, title, maker, origin, price, location, date, rating, notes, client) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);');
+        $stmt = $this->db->prepare('INSERT INTO entries (uuid, user, cat, title, maker, origin, price, location, date, rating, notes, client) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);');
         if($stmt) {
             try {
                 $stmt->bind_param('siissssssdsi', $entry->uuid, $this->userId, $entry->cat, $entry->title, $entry->maker, $entry->origin, $entry->price, $entry->location, $entry->date, $entry->rating, $entry->notes, $this->clientId);
