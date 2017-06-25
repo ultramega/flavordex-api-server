@@ -2,7 +2,7 @@
 
 This is the backend server that the Flavordex app uses to sync journal data.
 
-   * [Official Website](http://flavordex.com/)
+   * [Official Website](http://flavordex.ultramegasoft.com/)
    * [Flavordex for Android on GitHub](https://github.com/ultramega/flavordex)
 
 ## Requirements
