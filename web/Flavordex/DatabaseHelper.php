@@ -1154,26 +1154,16 @@ class DatabaseHelper {
             $catUuids[$extra->uuid] = true;
         }
 
+        $extraIds = array();
         $stmt = $this->db->prepare('SELECT id, uuid FROM extras WHERE cat = ?;');
         if($stmt) {
             try {
                 $stmt->bind_param('i', $cat->id);
                 if($stmt->execute()) {
-                    $stmt2 = $this->db->prepare('DELETE FROM extras WHERE id = ?;');
-                    if($stmt2) {
-                        try {
-                            $stmt->store_result();
-                            $stmt->bind_result($id, $uuid);
-                            while($stmt->fetch()) {
-                                if(!array_key_exists($uuid, $catUuids)) {
-                                    $stmt2->bind_param('i', $id);
-                                    $stmt2->execute();
-                                }
-                            }
-
-                            $this->insertCatExtras($cat);
-                        } finally {
-                            $stmt2->close();
+                    $stmt->bind_result($id, $uuid);
+                    while($stmt->fetch()) {
+                        if(!array_key_exists($uuid, $catUuids)) {
+                            $extraIds[] = $id;
                         }
                     }
                 }
@@ -1181,6 +1171,22 @@ class DatabaseHelper {
                 $stmt->close();
             }
         }
+
+        if(!empty($extraIds)) {
+            $stmt = $this->db->prepare('DELETE FROM extras WHERE id = ?;');
+            if($stmt) {
+                try {
+                    foreach($extraIds as $id) {
+                        $stmt->bind_param('i', $id);
+                        $stmt->execute();
+                    }
+                } finally {
+                    $stmt->close();
+                }
+            }
+        }
+
+        $this->insertCatExtras($cat);
     }
 
     /**
